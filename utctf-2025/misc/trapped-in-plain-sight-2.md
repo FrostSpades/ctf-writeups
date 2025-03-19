@@ -1,5 +1,5 @@
 # Trapped in Plain Sight 2
-Challenge Creator: Caleb (@eden.caleb.a on discord)
+Challenge Creator: Caleb (@eden.caleb.a on discord)  
 Writeup by: Ethan Andrews (UofUsec)
 
 ## Description
