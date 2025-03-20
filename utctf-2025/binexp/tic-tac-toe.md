@@ -12,7 +12,7 @@ By running the program, it appears to be a tictactoe game between a CPU.
 ![image](https://github.com/user-attachments/assets/d662e6d8-db36-44dc-81ee-0a312033d0b1)
 
 ### Information Gathering
-We can analyze it using Ghidra to see where potential vulnerabilities are. Using Ghidra, we can analyze the c code and change variables names to deobfuscate and perform some reverse engineering.
+We can analyze it using Ghidra (an open source decompiling tool for reverse engineering) to see where potential vulnerabilities are. Using Ghidra, we can analyze the c code and change variables names to deobfuscate and perform some reverse engineering.
 The CPU choices appear to be hard coded rather than based on an algorithm.
 
 ![image](https://github.com/user-attachments/assets/f52997ab-ad25-4f58-ae2f-c8e01eaf9c21)
@@ -29,14 +29,14 @@ it only considers the first character of the input as the move, so after the ove
 
 ![image](https://github.com/user-attachments/assets/108764f6-7911-413c-973c-dcd8a66ecd63)
 
-We can also use ghidra to determine where the variables are located. Luckily, the tie_or_win value is above the user input buffers allowing for buffer overflow directly into the variable.
+We can also use Ghidra to determine where the variables are located. Luckily, the tie_or_win value is above the user input buffers allowing for buffer overflow directly into the variable.
 
 ![image](https://github.com/user-attachments/assets/58f112fa-8990-4565-92e8-c46d2f70c1a9)
 ![image](https://github.com/user-attachments/assets/276b3890-e858-401b-98d8-13ea335aa057)
 
 ### Solution
 We can use pwntools to perform the exploit.
-```
+```python
 from pwn import *
 
 p = process("./tictactoe")
@@ -49,7 +49,7 @@ p = process("./tictactoe")
 Because we need to tie first, we will send the moves required to tie. We will leave the last move without a new line character
 because we want to overflow on the last move.
 
-```
+```python
 p.send(b"o\n")
 p.send(b"5\n")
 p.send(b"3\n")
@@ -62,7 +62,7 @@ tie_or_win value (stack - 0x10). This means we have to overflow it by `stack - 0
 Because we already sent one byte (the character 8), we will additionally send another 68 bytes and then another character to 
 make the tie_or_win variable non zero.
 
-```
+```python
 p.send(b"\x90"*68 + b"\x01" + b"\n")
 ```
 
@@ -79,10 +79,10 @@ is in between the user input buffer and the tie_or_win variable.
 
 ![image](https://github.com/user-attachments/assets/149ecdc3-5cc1-4e04-9d04-3fb2a675d6ee)
 
-So when we overflow, it changes all the values in the board state buffer. Luckily, we can fix this by simply using \x00 for
+So when we overflow it with \x90 bytes, it changes all the values in the board state buffer to \x90 effectively removing all valid moves. Luckily, we can fix this by simply using \x00 for
 padding instead of \x90. This gives us the final working exploit:
 
-```
+```python
 from pwn import *
 
 p = process("./tictactoe")
