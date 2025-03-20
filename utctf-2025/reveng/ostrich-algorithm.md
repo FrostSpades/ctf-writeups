@@ -1,6 +1,6 @@
 # Ostrich Algorithm
 Created by: Anthony (@stuckin414141 on discord)  
-Writeup by: Ethan Andrews (@frostspades on discord)
+Writeup by: Ethan Andrews (UofUsec)
 
 ## Description
 The worst algorithm, except for all the rest.
