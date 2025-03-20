@@ -23,11 +23,11 @@ Luckily, we can also analyze it with radare2, and we can actually find the main 
 
 ![image](https://github.com/user-attachments/assets/705806b8-fcdd-4e53-8d6d-01503e110deb)
 
-Looking at parts of the assembly output, we can see that this function is indeed interesting. It appears that this is where we can see the flag:
+Looking at parts of the assembly output, we can see that this function is indeed relevant. It appears that this is where we can see the flag:
 
 ![image](https://github.com/user-attachments/assets/94bedb78-cfe8-43ae-b8fc-199721c10830)
 
-Now that we have the address of the interesting function, we know where to look in Ghidra.
+Now that we've identified the address of the relevant function, we know where to look in Ghidra.
 
 ![image](https://github.com/user-attachments/assets/eb745b20-56d8-4ee5-962f-98e929caba70)
 
