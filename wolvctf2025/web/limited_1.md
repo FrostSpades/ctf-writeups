@@ -92,3 +92,15 @@ We now have a successful method for SQL injection.
 
 ### SQL Injection Payload
 
+So now, in order to get the actual statement being executed (which contains the flag as a comment), we can use the `information_schema.processlist`. This provides various information on the currently executing processes,
+including the actual statement. The actual statement is located in the info parameter. So in order to get the statement we can perform:
+
+```URL
+https://website.com/query?price_op==0/*&limit=*/ UNION SELECT 1, 1, 1, info FROM information_schema.processlist
+```
+
+This gives us the statement and the flag.
+
+## Important Concepts
+- SQL injection
+- information_schema.processlist
