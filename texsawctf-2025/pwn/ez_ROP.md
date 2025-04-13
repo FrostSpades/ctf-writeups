@@ -27,7 +27,7 @@ We also see another function named `weird_func()` that contains a `POP RDI` inst
 ![image](https://github.com/user-attachments/assets/494c0270-9dbc-461e-9a8c-d87c425f3e81)
 
 ### ROP Analysis
-It's clear that the solution involves a ROP chaining. However, using the ROP gadget tool, and searching for
+It's clear that the solution involves ROP chaining. However, using the ROP gadget tool, and searching for
 pop gadgets, there are very few at our disposal.
 
 ![image](https://github.com/user-attachments/assets/bb408ec1-57cb-48d3-8df5-e29f7b90569b)
@@ -64,7 +64,7 @@ then `RCX` gets inserted into `RBP`. However, when this happens, `RAX` gets set 
 ![image](https://github.com/user-attachments/assets/23802baa-22a5-4195-9f61-f2c947d653d7)
 
 This means that we need to set RSI before we can set RAX to 1. So if we set RSI to `0x403fc8` (the location of the .got entry)
-and then try to read in 1 byte in order to set RAX to 1, our registers before the syscall will look like:
+and then try to read in 1 byte in order to set RAX to 1, our registers before the syscall will look like the following:
 ```
 RAX => 0         # Read ID
 RSI => 0x403fc8  # Address of .got table
@@ -265,7 +265,7 @@ p.send(b"/bin/sh\x00")
 ```
 
 So now that we have the base address of libc and the location of the `/bin/sh` string (0x404000), we can do a classic
-execve ropchain. I added a simple function that makes calculating the address of each gadget easy.
+execve ropchain. I added a simple function that makes calculating the address of each gadget easy based on the libc offset.
 
 ```python3
 # Converts a libc address to its actual address based on the offset
