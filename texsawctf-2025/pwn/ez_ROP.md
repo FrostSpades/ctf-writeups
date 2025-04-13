@@ -15,12 +15,12 @@ Using checksec, we can see that NX is enabled, but no other protections are enab
 ![image](https://github.com/user-attachments/assets/e28381e5-1583-4067-8249-366f749eec4b)
 
 ### Code Analysis
-In analyzing the code with Ghidra, we can see that the main function calls a read syscall that reads in stdin into a
+In analyzing the code with Ghidra, we can see that the main function calls a read syscall that reads the stdin into a
 buffer on the stack.
 
 ![image](https://github.com/user-attachments/assets/0a77c407-f7ff-47be-9420-44c206784c2a)
 
-We can see that the buffer is `0x20` bytes away from RBP, but it reads in `0x80` bytes leading to a clear buffer overflow.
+We can see that the buffer is only `0x20` bytes away from RBP, but it reads in `0x80` bytes which is a clear buffer overflow.
 
 We also see another function named `weird_func()` that contains a `POP RDI` instruction.
 
@@ -28,17 +28,17 @@ We also see another function named `weird_func()` that contains a `POP RDI` inst
 
 ### ROP Analysis
 It's clear that the solution involves ROP chaining. However, using the ROP gadget tool, and searching for
-pop gadgets, there are very few at our disposal.
+pop gadgets, we can see there are very few at our disposal.
 
 ![image](https://github.com/user-attachments/assets/bb408ec1-57cb-48d3-8df5-e29f7b90569b)
 
-By looking at main again, we can also see that we can control RSI by controlling RBP.
+However, by looking at main again, we can see that we can actually control RSI by controlling RBP.
 
 ![image](https://github.com/user-attachments/assets/325b8584-9ba0-46e8-a1a9-05fd7252f9d8)
 
 Specifically, `RSI = RBP - 0x20`.
 
-Additionally, we know that after the read syscall finishes, it inserts the number of bytes read into the `RAX` register.
+Additionally, we know that after the read syscall finishes, it inserts the number of bytes it read into the `RAX` register.
 
 So we effectively have control over `RSI`, `RDI`, and `RAX`. One might be inclined to perform an `execve("/bin/sh")`
 call, but noticeably, the `RDX` register gets set to `0x80`, and because this is not a valid place in memory,
@@ -48,7 +48,7 @@ In searching for `RDX` gadgets, we can clearly see that there is no way of chang
 
 ![image](https://github.com/user-attachments/assets/0a97a3e3-3fca-4621-b610-7b5c964b56b5)
 
-This means the only solution will involve leaking a libc address so that we can gain access to libc's gadgets. We can verify
+This means the only solution is to leak a libc address so that we can gain access to libc's gadgets. We can verify
 that this binary does use libc:
 
 ![image](https://github.com/user-attachments/assets/e8e159d6-30b9-4c42-b167-f5a2adae60de)
@@ -56,14 +56,14 @@ that this binary does use libc:
 ### Leaking Libc
 
 In order to leak libc, we can try to print the address of `__libc_start_main` in the .got table through a write instruction.
-In order to write from this address into stdout, we need to set `RAX` to 1, while also setting `RSI` to this address.
+In order to write from the .got table to stdout, we need to set `RAX` to 1 (the fd for stdout), while also setting `RSI` to the address of the .got table.
 
 The only way we can control the `RSI` value is by popping `RBP`. Then `RBP - 0x20` gets inserted into `RCX`. And
-then `RCX` gets inserted into `RBP`. However, when this happens, `RAX` gets set to 0.
+then finally, `RCX` gets inserted into `RBP`. However, when this happens, `RAX` also gets set to 0.
 
 ![image](https://github.com/user-attachments/assets/23802baa-22a5-4195-9f61-f2c947d653d7)
 
-This means that we need to set RSI before we can set RAX to 1. So if we set RSI to `0x403fc8` (the location of the .got entry)
+This means that we need to set the `RSI` value before we can set RAX to 1. So if we set RSI to `0x403fc8` (the location of the .got entry)
 and then try to read in 1 byte in order to set RAX to 1, our registers before the syscall will look like the following:
 ```
 RAX => 0         # Read ID
@@ -74,7 +74,7 @@ RDX => 0x80      # Maximum of 0x80 characters
 
 However, this has two issues: 
 
-1. If you could read in one byte, it'll destroy one byte of `0x403fc8`.
+1. Even if you could read in one byte, it'll destroy one byte of `0x403fc8`.
 2. You won't be able to read in one byte because the .got table doesn't have write privileges.
 
 So if you execute this syscall, it'll fail and insert a negative error code into `RAX` instead of 1.
@@ -91,8 +91,8 @@ So instead of write, let's consider writev:
 ssize_t writev(int fd, const struct iovec *iov, int iovcnt);
 ```
 
-Instead of directly pointing to the location you wan't to write from, writev has you point to a list of `ioevc` structs
-that contain the pointer to the buffer along with the length of the buffer.
+Instead of directly pointing to the location you wan't to write from, writev points to a list of `ioevc` structs
+that contain the pointer to the buffer you want to read from along with the length of that buffer.
 
 ```c++
 struct iovec {
@@ -105,17 +105,17 @@ So this means, we could create an artificial `iovec` struct in the writeable .da
 
 ```c++
 struct iovec {
-  iov_base = 0x403fc8
-  iov_len = 8
+  iov_base = 0x403fc8  // Address of the .got table entry
+  iov_len = 8          // Length of the address
 }
 ```
 
-We could then set `RSI` to the location of this struct which would print out 8 bytes of the .got table, 
+We could then set `RSI` to the location of this artificial struct which would print out 8 bytes of the .got table, 
 and would also allow us to set `RAX` since the .data section is writeable.
 
 Now one might be concerned about the `RDX` register being set to `0x80` for this call since the `RDX` register
-determines the number of structs in the list. Luckily, if a struct contains NULL for both its base address and its length,
-writev will simply ignore the struct and move on to the next one. After doing a quick calculation, this means we need
+determines the number of structs in the list. Luckily, if a struct contains `NULL` for both its base address and its length,
+writev will simply ignore that struct and move on to the next one. After doing a quick calculation, this means we need
 `0x800` bytes of empty space which is much smaller than the .data section, so if we place the struct at the beginning of the .data
 section, it will simply ignore all of the following empty values.
 
@@ -139,7 +139,7 @@ This means we need 32 bytes of padding to get to the RBP value.
 payload = b"\x90" * 32
 ```
 
-Now we need to craft a read call to the beginning of the .data section to create our struct.
+Now we need to craft a read call that sends data to the beginning of the .data section (address `0x404000`) to create our struct.
 Luckily, as discussed earlier, we can just set `RBP` to `0x20` bytes above the desired `RSI` address and then jump directly
 to line `0x40110a` to perform the read. We also need to add a random value for `pop rbp` because the function ends
 with a `pop rbp` instruction.
@@ -162,18 +162,19 @@ p.send(struct_payload)
 ```
 
 - IMPORTANT: When all the payloads send instantly, it screws with the exploit. Normally, this is handled by having
-`p.recv()` calls in between payloads, but this program does not send us any data we can use as checkpoints.
+`p.recv()` calls in between payloads, but this program does not naturally send us any data we can use as checkpoints.
 Because of this, I've added an input
-statement before each payload. When the next payload is to be sent, you just press enter in the terminal to send the next payload.
+statement before each payload. To send the next payload, you just press enter in the terminal.
 
-Now we have `RSI` set to our struct, `RAX` set to `0x14`. We just need to set `RDI` and then perform the syscall.
+Now we have `RSI` set to point to our struct and `RAX` set to `0x14`. We just need to set `RDI` to `0x1` (representing stdout) 
+and then perform the syscall.
 
 We will modify our previous payload to redirect execution to the `pop rdi` instruction
 found in `weird_func()`. And then we will redirect execution to the syscall.
 
 ```python3
 payload += p64(0x40112e)   # Pop RDI Instruction
-payload += p64(0x1)        # RDI Value
+payload += p64(0x1)        # stdout
 payload += p64(0xdeadbeef) # Garbage RBP Value
 payload += p64(0x401126)   # syscall instruction
 payload += p64(0xdeadbeef) # Garbage RBP Value
@@ -181,7 +182,7 @@ payload += p64(b"\n")
 ```
 
 Then executing this syscall will print the address of `__libc_start_main` from the .got table. 
-We can then capture this address and then set the context to our `libc.so.6` library provided by the docker
+We can then capture this address and then set the context of our `libc.so.6` library provided by the docker
 file.
 
 ```python3
@@ -236,11 +237,11 @@ We will add the address to the end of our first payload:
 payload += p64(0x401107)
 ```
 
-This allows us to construct a second ropchain to send to the server. The first thing we need to do is place
+This allows us to construct and send a second ropchain. The first thing we must do is place
 the `/bin/sh` string into the data section so we can reference it for our execve call. We will do this by
 calling the `pop rbp` instruction, placing the .data address into `RBP`, and then calling read. 
 
-We will also include another call to read in a third ropchain because we are running out of space on this one as well.
+We will also add another call to read in a third ropchain because we are running out of space on this one as well.
 
 ```python3
 input("Press Enter to send next payload\n")
@@ -361,6 +362,8 @@ p.interactive()
 ```
 
 This gives a shell and you can simply `cat flag.txt`.
+
+(Remember to send each payload manually by pressing the enter key in the terminal)
 
 ## Important Concepts
 - libc rop chaining
